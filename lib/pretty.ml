@@ -416,8 +416,8 @@ end = struct
     | [] ->
       ()
     | _ :: _ ->
-      (format_list_nl format_t fmt l;
-       Format.fprintf fmt "@\n")
+       (format_list_nl format_t fmt l;
+        Format.fprintf fmt "@\n")
 end
 
 and Direction : sig
@@ -637,7 +637,7 @@ end = struct
   and format_t fmt e =
     match snd e with
     | Constant { annotations; typ; name; value } ->
-      Format.fprintf fmt "@[<4>%aconst %a %s = %a;@]"
+      Format.fprintf fmt "@[%aconst %a %s = %a;@]"
         Annotation.format_ts annotations
         Type.format_t typ
         (snd name)
@@ -725,26 +725,25 @@ end = struct
         format_typ_or_decl typ_or_decl
         (snd name)
     | ControlType { annotations; name; type_params; params } ->
-      Format.fprintf fmt "@[<4>%acontrol %s%a@,(@[%a@]);@]"
-        Annotation.format_ts annotations
+        Annotation.format_ts fmt annotations;
+      Format.fprintf fmt "@[<4>control %s%a@,(@[%a@]);@]"
         (snd name)
         Type.format_type_params type_params
         (format_list_sep Parameter.format_t ",") params
     | ParserType { annotations; name; type_params; params } ->
-      Format.fprintf fmt "@[<4>%aparser %s%a@,(@[%a@]);@]"
-        Annotation.format_ts annotations
+       Annotation.format_ts fmt annotations;
+       Format.fprintf fmt "@[<4>parser %s%a@,(@[%a@]);@]"
         (snd name)
         Type.format_type_params type_params
         (format_list_sep Parameter.format_t ",") params
     | PackageType { annotations; name; type_params; params } ->
-      Format.fprintf fmt "@[<4>%apackage %s%a@,(@[%a@]);@]"
-        Annotation.format_ts annotations
+       Annotation.format_ts fmt annotations;      
+       Format.fprintf fmt "@[<4>package %s%a@,(@[%a@]);@]"
         (snd name)
         Type.format_type_params type_params
         (format_list_sep Parameter.format_t ",") params
     | Struct { annotations; name; fields } ->
-        Format.fprintf fmt "@[%a@]"
-          Annotation.format_ts annotations;
+       Annotation.format_ts fmt annotations;
         Format.fprintf fmt "@[<4>struct %a %a"
           P4String.format_t name
           format_fields fields
