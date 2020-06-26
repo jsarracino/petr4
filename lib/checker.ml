@@ -2483,7 +2483,7 @@ and type_nameless_instantiation env ctx info typ args =
      | TypeName decl_name ->
         let out_args, out_typ = type_constructor_invocation env ctx info decl_name type_args args in
         let inst = NamelessInstantiation { typ = translate_type env [] typ;
-                                           args = out_args }
+                                                 args = out_args }
         in
         { expr = inst;
           typ = out_typ;
@@ -2626,25 +2626,13 @@ and type_assignment env ctx lhs rhs =
 (* This belongs in an elaboration pass, really. - Ryan *)
 and type_direct_application env ctx typ args =
   let open Types.Expression in
-  let expr_ctx = ExprContext.of_stmt_context ctx in
+  let open Types.Statement in
+  print_s [%message "typ" ~typ:(typ:Types.Type.t)];
   let instance = NamelessInstantiation { typ = typ; args = [] } in
   let apply = ExpressionMember { expr = Info.dummy, instance; name = (Info.dummy, "apply") } in
-  let call = FunctionCall { func = Info.dummy, apply; type_args = []; args = args } in
-  let call_typed = type_expression env expr_ctx (Info.dummy, call) in
-  match (snd call_typed).expr with
-  | FunctionCall call ->
-     let args =
-       List.map call.args
-         ~f:(function
-           | Some a -> a
-           | None -> failwith "missing argument")
-     in
-     { stmt = DirectApplication { typ = translate_type env [] typ;
-                                  args = args };
-       typ = StmType.Unit },
-     env
-  | _ -> raise_s [%message "function call not typed as FunctionCall?"
-                     ~typed_expr:((snd call_typed).expr : Prog.Expression.pre_t)]
+  let call = MethodCall { func = Info.dummy, apply; type_args = []; args = args } in
+  let stmt, env = type_statement env ctx (Info.dummy, call) in
+  snd stmt, env
 
 (* Question: Can Conditional statement update env? *)
 (* Section 11.6 The condition is required to be a Boolean

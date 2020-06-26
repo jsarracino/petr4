@@ -322,9 +322,6 @@ and Statement : sig
         | Assignment of
             { lhs: Expression.t;
               rhs: Expression.t }
-        | DirectApplication of
-            { typ: Type.t [@key "type"];
-              args: Expression.t list }
         | Conditional of
             { cond: Expression.t;
               tru: t;
@@ -373,9 +370,6 @@ end = struct
     | Assignment of
         { lhs: Expression.t;
           rhs: Expression.t } [@name "assignment"]
-    | DirectApplication of
-        { typ: Type.t [@key "type"];
-          args: Expression.t list } [@name "direct_application"]
     | Conditional of
         { cond: Expression.t;
           tru: t;

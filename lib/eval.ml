@@ -474,7 +474,6 @@ module MakeInterpreter (T : Target) = struct
     match (snd stm).stmt with
     | MethodCall{func;type_args=ts;args} -> eval_method_call ctrl env st sign func ts args
     | Assignment{lhs;rhs}                -> eval_assign ctrl env st sign lhs rhs
-    | DirectApplication{typ;args}        -> eval_app' ctrl env st sign args typ
     | Conditional{cond;tru;fls}          -> eval_cond ctrl env st sign cond tru fls
     | BlockStatement{block}              -> eval_block ctrl env st sign block
     | Exit                               -> eval_exit env st sign
@@ -486,6 +485,7 @@ module MakeInterpreter (T : Target) = struct
   and eval_method_call (ctrl : ctrl) (env : env) (st : state) (sign : signal)
       (func : Expression.t) (targs : Type.t list)
       (args : Expression.t option list) : env * state * signal =
+    print_s [%message "eval_method_call"];
     match sign with
     | SContinue -> let (e,s,i,_) = eval_funcall ctrl env st func targs args in (e,s,i)
     | SReject _
@@ -640,15 +640,6 @@ module MakeInterpreter (T : Target) = struct
           else bits_of_lpmmask acc b Bigint.(v / two)
     else bits_of_lpmmask Bigint.(acc + one) true Bigint.(v/two)
 
-  and eval_app' (ctrl : ctrl) (env : env) (st : state) (s : signal)
-      (args : Expression.t list) (t : Type.t) : env * state * signal =
-    let (env', st', sign', v) = eval_nameless ctrl env st t  [] in
-    let typname = name_only (name_of_type_ref t) in
-    let args' = List.map ~f:(fun arg -> Some arg) args in
-    let env'' = EvalEnv.set_namespace (EvalEnv.get_namespace env' ^ typname) env' in
-    let (env'', st'', sign'', _) = eval_app ctrl env'' st' sign' v args' in
-    (EvalEnv.set_namespace (EvalEnv.get_namespace env') env'', st'', sign'')
-
   and eval_cond (ctrl : ctrl) (env : env) (st : state) (sign : signal) (cond : Expression.t)
       (tru : Statement.t) (fls : Statement.t option) : env * state * signal =
     let eval_cond' env cond tru fls =
@@ -760,7 +751,7 @@ module MakeInterpreter (T : Target) = struct
       | ExpressionMember{expr=e; name=(_,n)} -> lvalue_of_expr_mem ctrl env st (snd expr).typ e n
       | BitStringAccess{bits;lo;hi} -> lvalue_of_expr_bsa ctrl env st (snd expr).typ bits lo hi
       | ArrayAccess{array=a;index} -> lvalue_of_expr_ara ctrl env st (snd expr).typ a index
-      | _ -> failwith "not an lvalue" end
+      | e -> raise_s [%message "not an lvalue" ~e:(e:Expression.pre_t)] end
     | SReject _ | SExit | SReturn _ -> env, st, signal, None
 
   and lvalue_of_expr_mem (ctrl : ctrl) (env : env) (st : state) (typ : Type.t)
@@ -796,6 +787,7 @@ module MakeInterpreter (T : Target) = struct
 
   and eval_expr (ctrl : ctrl) (env : env) (st : state) (s : signal)
       (exp : Expression.t) : env * state * signal * value =
+    print_s [%message "eval_expr"];
     match s with
     | SContinue ->
       begin match (snd exp).expr with
@@ -954,6 +946,7 @@ module MakeInterpreter (T : Target) = struct
 
   and eval_expr_mem (ctrl : ctrl) (env : env) (st : state) (expr : Expression.t)
       (name : P4String.t) : env * state * signal * value =
+    print_s [%message "expr_mem"];
     let (env', st', s, v) = eval_expr ctrl env st SContinue expr in
     let fourth4 (_,_,_,x) = x in
     match s with
@@ -1009,14 +1002,22 @@ module MakeInterpreter (T : Target) = struct
   and eval_funcall (ctrl : ctrl) (env : env) (st : state) (func : Expression.t)
       (targs : Type.t list)
       (args : Expression.t option list) : env * state * signal * value =
+    print_s [%message "eval_funcall"];
     let (env', st', s, cl) = eval_expr ctrl env st SContinue func in
+    print_s [%message "eval_funcall 2"];
     match s with
     | SContinue ->
       begin match cl with
         | VAction{scope;params; body}
-        | VFun{scope;params; body}      -> eval_funcall' ctrl env' st' scope params args body
-        | VBuiltinFun{name=n;caller=lv} -> eval_builtin ctrl env' st' n lv args
-        | VExternFun{name=n;caller=v}   -> eval_extern_call ctrl env' st' n v targs args
+        | VFun{scope;params; body}      ->
+             print_s [%message "VFun"];
+           eval_funcall' ctrl env' st' scope params args body
+        | VBuiltinFun{name=n;caller=lv} ->
+             print_s [%message "VBuiltinFun"];
+           eval_builtin ctrl env' st' n lv args
+        | VExternFun{name=n;caller=v}   ->
+             print_s [%message "VExternFun"];
+           eval_extern_call ctrl env' st' n v targs args
         | _ -> failwith "unreachable" end
     | SReject _ -> (env',st',s,VNull)
     | _ -> failwith "unreachable"
@@ -1032,20 +1033,25 @@ module MakeInterpreter (T : Target) = struct
 
   and eval_nameless (ctrl : ctrl) (env : env) (st : state) (typ : Type.t)
       (args : Expression.t list) : env * state * signal * value =
+    print_s [%message "eval_nameless"];
     let name = name_of_type_ref typ in
     let decl = EvalEnv.find_decl name env in
+    print_s [%message "eval_nameless 2"];
     let args' = List.map ~f:(fun arg -> Some arg) args in
     let (env',st',s,v) = let open Declaration in match snd decl with
       | Control typ_decl ->
+         print_s [%message "eval_nameless 3"];
         let (_,env',st',s) = copyin ctrl env st env typ_decl.constructor_params args' in
         let state = env'
           |> EvalEnv.get_val_firstlevel
           |> List.rev in
+         print_s [%message "eval_nameless 4"];
         let v' = VControl { cscope = env;
                             cvs = state;
                             cparams = typ_decl.params;
                             clocals = typ_decl.locals;
                             apply = typ_decl.apply; } in
+         print_s [%message "eval_nameless 5"];
         (EvalEnv.pop_scope env',st',s,v')
       | Parser typ_decl ->
         let (_,env',st',s) = copyin ctrl env st env typ_decl.constructor_params args' in
