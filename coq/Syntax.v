@@ -14,6 +14,8 @@ Inductive function_kind :=
   | Action
   | Function
   | Builtin
+.
+
 Inductive name :=
   | BareName (name: string)
   | QualifiedName (path: list string) (name: string)
@@ -117,6 +119,8 @@ with expression :=
   | NamelessInstantiation (type: type) (args: list argument)
   | Mask (expr: expression) (mask: expression)
   | Range (lo: expression) (hi: expression)
+
+with value :=
 .
 
 Inductive declaration :=
@@ -172,3 +176,61 @@ Record parser := MkParser {
   states: list State.state 
 }.
 End Parser.
+
+Inductive environment :=.
+
+Fixpoint evalStatements (statements: list statement) (env: environment) 
+  : option (bool * environment) :=
+  
+  match statements with
+  | nil => (true, env)
+  | stmt :: rest => 
+    match stmt with
+    | MethodCall func type_args args =>
+      match func with
+      | 
+      end
+    
+    | Assignment lhs rhs =>
+      let (lvalue, envl) = evalLValue lhs env
+          (rvalue, envr) = evalRvalue rhs envl
+      in match updateEnvironment envr lvalue rvalue with
+      | None => None
+      | Some envfinal => Some (true, envfinal)
+      end
+          
+    | BlockStatement block =>
+      match evalStatements block (push env) with
+      | None => None
+      | Some (reject, envnew) => Some (reject, pop envnew)
+      end
+      
+    | StatementConstant type name value =>
+      match insertEnvironment env name value with
+      | None => None
+      | Some envnew => Some (true, envnew)
+      end
+      
+    | StatementVariable type name init =>
+      let opt_val_envnew = match init with
+                           | None => Some (defaultValue type, env)
+                           | Some expr => evalRvalue expr env
+                           end
+      in match opt_val_envnew with
+         | None => None
+         | Some (value, envnew) =>
+           match insertEnvironment env name value with
+           | None => None
+           | Some envfinal => Some (true, envfinal)
+           end
+         end
+    end 
+  end
+.
+
+
+
+
+
+
+
