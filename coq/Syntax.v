@@ -1,5 +1,27 @@
 Require Import String.
 
+Class Monad (M : Type -> Type) : Type :=
+  { mret : forall A, A -> M A;
+    mbind : forall A B, M A -> (A -> M B) -> M B
+  }.
+
+(* Adapted from coq-ext-lib *)
+(* https://github.com/coq-community/coq-ext-lib/blob/v8.5/theories/Structures/Monad.v*)
+Module MonadNotation.
+
+  Delimit Scope monad_scope with monad.
+
+  Notation "c >>= f" := (@mbind _ _ c f) (at level 50, left associativity) : monad_scope.
+  Notation "f =<< c" := (@mbind _ _ c f) (at level 51, right associativity) : monad_scope.
+
+  Notation "x <- c1 ;; c2" := (@mbind _ _ c1 (fun x => c2))
+    (at level 100, c1 at next level, right associativity) : monad_scope.
+
+  Notation "e1 ;; e2" := (_ <- e1%monad ;; e2%monad)%monad
+    (at level 100, right associativity) : monad_scope.
+
+End MonadNotation.
+
 Inductive direction :=
   | In
   | Out
@@ -17,8 +39,8 @@ Inductive function_kind :=
 .
 
 Inductive name :=
-  | BareName (name: string)
-  | QualifiedName (path: list string) (name: string)
+  | BareName (nm: string)
+  | QualifiedName (path: list string) (nm: string)
 .
 
 Inductive unaryoperator :=
@@ -178,6 +200,24 @@ Record parser := MkParser {
 End Parser.
 
 Inductive environment :=.
+
+Definition interp_monad (A: Type) :=
+  environment -> option (A * environment).
+
+Definition interp_return (A: Type) (a: A) : interp_monad A :=
+  fun env => Some (a, env).
+
+Definition interp_bind (A B: Type) (c: interp_monad A) (f: A -> interp_monad B) : interp_monad B :=
+  fun env =>
+    match c env with
+    | Some (a, env') => f a env'
+    | None => None
+    end.
+
+Instance interp_monad_inst : Monad interp_monad :=
+  { mret := interp_return;
+    mbind := interp_bind
+  }.
 
 Fixpoint evalStatements (statements: list statement) (env: environment) 
   : option (bool * environment) :=
