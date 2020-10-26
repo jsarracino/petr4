@@ -130,8 +130,32 @@ module PreUp4Filter : Target = struct
     (st,s)
 
   (* TODO: unsure of type of this method.. *)
-  let eval_up4_ctrl = 
-    failwith "unimplemented"
+  (* let eval_up4_ctrl = 
+    failwith "unimplemented" *)
+
+  (* Update state and environment with parser params, and 
+     return processed parser params that can be used in running the apply. *)
+  let helper (env: env) (st: state) (paramStrings: string list) 
+             (params: Parameter.t list): 
+             state * env * (Info.t * Expression.typed_t) option list = 
+    let locs = List.map paramStrings ~f:(fun _ -> State.fresh_loc ()) in 
+    let namesToLocs = List.mapi paramStrings ~f:(fun i pString -> 
+        Types.BareName (Info.dummy, pString), List.nth_exn locs i) in 
+    let locsToValues = List.mapi params ~f:(fun i param -> 
+        let loc = List.nth_exn locs i in 
+        if i = 0 then loc, VRuntime {loc = State.packet_location; 
+                                     obj_name = "packet_in"; } 
+        else loc, init_val_of_typ env param.typ) in
+    let updatedState = List.fold_left locsToValues ~init:st 
+        ~f:(fun st' (loc, value) -> State.insert_heap loc value st') in 
+    let updatedEnv = List.fold_left namesToLocs ~init:env 
+        ~f:(fun env' (name, loc) -> EvalEnv.insert_val name loc env') in
+    let open Expression in
+    let exprs = List.mapi namesToLocs ~f:(fun i (name, _) -> 
+        Some (Info.dummy, {expr = Name name; 
+                           dir = (List.nth_exn params i).direction; 
+                           typ = (List.nth_exn params i).typ})) in
+      updatedState, updatedEnv, exprs
 
   (* hj283: push [pkt] through pipeline of this architecture, 
      updating the environment and state and return the 
@@ -144,7 +168,7 @@ module PreUp4Filter : Target = struct
     let vs = assert_package main |> snd in
     (* Get Package parameters *)
     let parser = List.Assoc.find_exn vs "p" ~equal:String.equal |> fun x -> State.find_heap x st in
-    let control = List.Assoc.find_exn vs "c" ~equal:String.equal |> fun x -> State.find_heap x st in
+    (* let control = List.Assoc.find_exn vs "c" ~equal:String.equal |> fun x -> State.find_heap x st in *)
     let deparser = List.Assoc.find_exn vs "d" ~equal:String.equal |> fun x -> State.find_heap x st in
     (* *)
     let params =
@@ -221,7 +245,8 @@ module PreUp4Filter : Target = struct
 
   (* TODO: implement *)
   let get_outport (st : state) (env : env) : Bigint.t =
-    failwith "unimplemented"
+    State.find_heap "__INGRESS_PORT__" st |> bigint_of_val
+    (* failwith "unimplemented" *)
 
   end 
 

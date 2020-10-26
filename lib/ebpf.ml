@@ -117,6 +117,33 @@ module PreEbpfFilter : Target = struct
     let (st,s,_) = app ctrl env st SContinue control args in 
     (st,s)
 
+  (* Update state and environment with parser params, and 
+     return the updated state, env, BareNames of params, 
+     and expression options to be applied to the apply. *)
+     let helper (env: env) (st: state) (paramStrings: string list) 
+          (params: Parameter.t list): 
+          state * env * Types.name list 
+          * (Info.t * Expression.typed_t) option list = 
+      let locs = List.map paramStrings ~f:(fun _ -> State.fresh_loc ()) in 
+      let namesToLocs = List.mapi paramStrings ~f:(fun i pString -> 
+      Types.BareName (Info.dummy, pString), List.nth_exn locs i) in 
+      let names = List.map namesToLocs ~f:(fun (name, _) -> name) in 
+      let locsToValues = List.mapi params ~f:(fun i param -> 
+      let loc = List.nth_exn locs i in 
+      if i = 0 then loc, VRuntime {loc = State.packet_location; 
+                                  obj_name = "packet_in"; } 
+      else loc, init_val_of_typ env param.typ) in
+      let updatedState = List.fold_left locsToValues ~init:st 
+      ~f:(fun st' (loc, value) -> State.insert_heap loc value st') in 
+      let updatedEnv = List.fold_left namesToLocs ~init:env 
+      ~f:(fun env' (name, loc) -> EvalEnv.insert_val name loc env') in
+      let open Expression in
+      let exprs = List.mapi namesToLocs ~f:(fun i (name, _) -> 
+      Some (Info.dummy, {expr = Name name; 
+                        dir = (List.nth_exn params i).direction; 
+                        typ = (List.nth_exn params i).typ})) in
+      updatedState, updatedEnv, names, exprs
+
   let eval_pipeline (ctrl : ctrl) (env : env) (st : state) (pkt : pkt)
       (app : state apply) : state * env * pkt option =
     let main = State.find_heap (EvalEnv.find_val (BareName (Info.dummy, "main")) env) st in
@@ -127,7 +154,7 @@ module PreEbpfFilter : Target = struct
       match parser with
       | VParser {pparams=ps;_} -> ps
       | _ -> failwith "parser is not a parser object" in
-    let vpkt = VRuntime {loc = State.packet_location; obj_name = "packet_in"; } in
+    (* let vpkt = VRuntime {loc = State.packet_location; obj_name = "packet_in"; } in
     let pkt_name = Types.BareName (Info.dummy, "packet") in
     let hdr = init_val_of_typ env (List.nth_exn params 1).typ in
     let hdr_name = Types.BareName (Info.dummy, "headers") in
@@ -153,7 +180,13 @@ module PreEbpfFilter : Target = struct
     let hdr_expr =
       Some (Info.dummy, {expr = Name hdr_name; dir = InOut; typ = (List.nth_exn params 1).typ}) in
     let accept_expr =
-      Some (Info.dummy, {expr = Name accept_name; dir = InOut; typ = Bool}) in
+      Some (Info.dummy, {expr = Name accept_name; dir = InOut; typ = Bool}) in *)
+    let paramStrings = ["packet"; "headers"; "accept"] in 
+    let st, env, names, exprs = helper env st paramStrings params in
+    let accept_name = List.nth_exn names 2 in
+    let pkt_expr = List.nth_exn exprs 0 in 
+    let hdr_expr = List.nth_exn exprs 1 in 
+    let accept_expr = List.nth_exn exprs 2 in 
     let (st,state, _) =
       app ctrl env st SContinue parser [pkt_expr; hdr_expr] in
     match state with 
