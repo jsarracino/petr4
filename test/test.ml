@@ -1,8 +1,6 @@
 open Core
 open Petr4
 open Common
-(* open Pp.O *)
-(* open Alcotest *)
 
 module Conf: Parse_config = struct
   let red s = s
@@ -68,34 +66,23 @@ let bad_test f file () =
   Alcotest.(check bool) "bad test" false
     (f ["../examples"] (example_path ["checker_tests"; "bad"; file]))
 
-module P4 = Types 
+let pp_test () =
+  Alcotest.(check bool) "printing test" true Printingtests.test
 
 let example_path l =
   let root = Filename.concat ".." "examples" in
   List.fold_left l ~init:root ~f:Filename.concat
 
-let print pp = Format.printf "%a@." Pp.to_fmt pp
-type 'a info = Info.t * 'a [@@deriving sexp,show,yojson]
-
-let x = Types.Expression.True 
-
-let t = Prettypp.Expression.format_t () (Info.dummy, x) 
-
-(* good test is result is true, bad is false. f is supposed to return a bool *)
-(* not checking a boolean - checking a string. string comparison in alcotest  *)
-let pp_test () =
-  Alcotest.(check string) "bool test" "true" t 
-
 let () =
   let open Alcotest in
   run "Tests" [
-    "parser tests good", (Stdlib.List.map (fun name ->
+    (* "parser tests good", (Stdlib.List.map (fun name ->
         test_case name `Quick (good_test parser_test name)) good_files);
-    "typecheck tests good", (Stdlib.List.map (fun name ->
+       "typecheck tests good", (Stdlib.List.map (fun name ->
         test_case name `Quick (good_test typecheck_test name)) good_files);
-    "typecheck tests bad", (Stdlib.List.map (fun name ->
-        test_case name `Quick (bad_test typecheck_test name)) bad_files);
-    "typecheck tests pp", [test_case "true" `Quick pp_test];
+       "typecheck tests bad", (Stdlib.List.map (fun name ->
+        test_case name `Quick (bad_test typecheck_test name)) bad_files); *)
+    "typecheck tests pp", [test_case "printing tests" `Quick pp_test]
   ]
 
 
